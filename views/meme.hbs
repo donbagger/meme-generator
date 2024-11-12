@@ -1,0 +1,64 @@
+<h2>Create Your Meme</h2>
+<form action="/generate" method="POST" enctype="multipart/form-data">
+  <div class="form-group">
+    <label for="topText">Top Text:</label>
+    <input type="text" id="topText" name="topText" required>
+  </div>
+  <div class="form-group">
+    <label for="bottomText">Bottom Text:</label>
+    <input type="text" id="bottomText" name="bottomText" required>
+  </div>
+  <div class="form-group">
+    <label for="memeImage">Choose a Meme Image:</label>
+    <select name="memeImage" id="memeImage" onchange="updatePreview()">
+      {{#each memeImages}}
+        <option value="{{this}}">{{this}}</option>
+      {{/each}}
+    </select>
+  </div>
+
+  <!-- Image Preview -->
+  <div class="form-group">
+    <img id="imagePreview" src="/templates/meme1.jpg" alt="Meme Preview" class="meme-preview">
+  </div>
+
+  <div class="form-group">
+    <label for="customImage">Or upload your own:</label>
+    <input type="file" id="customImage" name="customImage" accept="image/*" onchange="loadFile(event)">
+  </div>
+  <button type="submit">Generate Meme</button>
+</form>
+
+<!-- Display the Generated Meme -->
+{{#if generatedMeme}}
+  <h3>Your Generated Meme:</h3>
+  <img src="{{generatedMeme}}" alt="Generated Meme" class="meme-image">
+{{/if}}
+
+
+{{!-- Gallery --}}
+
+<h3>See what others created (at your own risk)</h3>
+<div class="gallery">
+  {{#each galleryImages}}
+    <a href="{{this}}" target="_blank">
+      <img src="{{this}}" alt="Generated Meme" class="gallery-image">
+    </a>
+  {{/each}}
+</div>
+
+<script>
+  function updatePreview() {
+    const selectedImage = document.getElementById("memeImage").value;
+    document.getElementById("imagePreview").src = selectedImage;
+  }
+
+  function loadFile(event) {
+    const previewImage = document.getElementById("imagePreview");
+    const file = event.target.files[0];
+
+    if (file) {
+      previewImage.src = URL.createObjectURL(file);
+    }
+  }
+</script>
