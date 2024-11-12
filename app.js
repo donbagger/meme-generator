@@ -42,13 +42,8 @@ app.use((req, res, next) => {
     });
   });
 
-const storage = multer.diskStorage({
-  destination: './public/uploads',
-  filename: (req, file, cb) => {
-    cb(null, Date.now() + path.extname(file.originalname));
-  }
-});
-const upload = multer({ storage });
+  const storage = multer.memoryStorage();
+  const upload = multer({ storage });
 
 app.get('/', (req, res) => {
   const memeImages = ['/templates/meme1.jpg', '/templates/meme2.jpg', '/templates/meme3.jpg', '/templates/meme4.jpg', '/templates/meme5.jpg'];
@@ -59,15 +54,17 @@ app.get('/', (req, res) => {
 app.post('/generate', upload.single('customImage'), async (req, res) => {
   const topText = req.body.topText.toUpperCase();
   const bottomText = req.body.bottomText.toUpperCase();
-  const uploadedImagePath = req.file ? `/uploads/${req.file.filename}` : null;
-  const selectedImage = uploadedImagePath || req.body.memeImage;
+  const selectedImage = req.file ? req.file.buffer : `public${req.body.memeImage}`;
 
   try {
-    const image = await Jimp.read(`public${selectedImage}`);
+    // Load the image from buffer if it's uploaded; otherwise, use the selected template
+    const image = await Jimp.read(req.file ? selectedImage : selectedImage);
     image.resize(768, Jimp.AUTO);
+
     const fontWhite = await Jimp.loadFont(Jimp.FONT_SANS_64_WHITE);
     const fontBlack = await Jimp.loadFont(Jimp.FONT_SANS_64_BLACK);
 
+    // Function to print text with an outline
     function printTextWithOutline(image, fontWhite, fontBlack, text, x, y, width, height) {
       image.print(fontBlack, x - 3, y - 3, { text, alignmentX: Jimp.HORIZONTAL_ALIGN_CENTER }, width, height);
       image.print(fontBlack, x + 3, y - 3, { text, alignmentX: Jimp.HORIZONTAL_ALIGN_CENTER }, width, height);
@@ -81,43 +78,28 @@ app.post('/generate', upload.single('customImage'), async (req, res) => {
       image.print(fontWhite, x, y, { text, alignmentX: Jimp.HORIZONTAL_ALIGN_CENTER }, width, height);
     }
 
+    // Add top and bottom text with outline
     printTextWithOutline(image, fontWhite, fontBlack, topText, 0, 50, image.bitmap.width, image.bitmap.height);
     printTextWithOutline(image, fontWhite, fontBlack, bottomText, 0, image.bitmap.height - 125, image.bitmap.width, image.bitmap.height);
 
-    const outputPath = `/outputs/meme-${Date.now()}.png`;
-    await image.writeAsync(`public${outputPath}`);
+    // Create an in-memory output path for the generated meme
+    const outputBuffer = await image.getBufferAsync(Jimp.MIME_PNG);
 
-    if (uploadedImagePath) {
-      fs.unlink(`public${uploadedImagePath}`, (err) => {
-        if (err) console.error("Error deleting uploaded image:", err);
-      });
-    }
+    // Send the meme directly as a base64-encoded image in the response
+    const base64Image = outputBuffer.toString('base64');
+    const dataUrl = `data:image/png;base64,${base64Image}`;
 
-    fs.readdir('public/outputs', (err, files) => {
-      if (err) {
-        console.error("Error reading outputs directory:", err);
-      } else {
-        const memeFiles = files
-          .map(file => ({ name: file, time: fs.statSync(`public/outputs/${file}`).mtime.getTime() }))
-          .sort((a, b) => a.time - b.time);
-          
-
-        if (memeFiles.length > 10) {
-          const filesToDelete = memeFiles.slice(0, memeFiles.length - 10);
-          filesToDelete.forEach(file => {
-            fs.unlink(`public/outputs/${file.name}`, (err) => {
-              if (err) console.error("Error deleting old meme file:", err);
-            });
-          });
-        }
-      }
+    // Render the template with the generated meme as a Data URL
+    res.render('meme', {
+      memeImages: ['/templates/meme1.jpg', '/templates/meme2.jpg', '/templates/meme3.jpg', '/templates/meme4.jpg', '/templates/meme5.jpg', ],
+      generatedMeme: dataUrl,
+      galleryImages: req.galleryImages
     });
-
-    res.render('meme', { memeImages: ['/templates/meme1.jpg', '/templates/meme2.jpg', '/templates/meme3.jpg'], generatedMeme: outputPath, galleryImages: req.galleryImages });
   } catch (err) {
     res.status(500).send("Error generating meme: " + err.message);
   }
 });
+
 
 app.listen(PORT, () => {
   console.log(`Server is running on http://localhost:${PORT}`);
